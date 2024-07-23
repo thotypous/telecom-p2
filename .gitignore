@@ -1,0 +1,12 @@
+*.bo
+*.ba
+mk*.v
+mk*.cxx
+mk*.h
+model_*.cxx
+model_*.h
+*.o
+*.so
+*.use
+*.fs
+*.exe
