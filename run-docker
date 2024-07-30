@@ -1,0 +1,2 @@
+#!/bin/sh
+exec docker run -it -v ./:/src -w /src -v /dev/bus/usb:/dev/bus/usb --rm ghcr.io/thotypous/docker-fpga-builder:main "$@"

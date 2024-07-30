@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+import os
+import json
+import requests
+from subprocess import Popen, PIPE
+from threading import Timer
+
+
+def run_tests():
+    tests = [
+        ('HDB3', 2, 10),
+        ('E1', 2, 10),
+        ('HDLC', 2, 10),
+        ('DPLL', 2, 10),
+    ]
+    scores = {}
+
+    os.system('make clean')
+    if os.system('make') != 0:
+        print('ABORTANDO TESTES: falha ao sintetizar! '
+              'Certifique-se que não há erros de compilação e que sua lógica '
+              'consegue executar rápido o suficiente com relação ao clock '
+              'fornecido.')
+        return {}
+
+    for test, weight, timeout in tests:
+        test_bin = f'Test{test}.exe'
+        scores[test] = 0
+
+        p = Popen(['make', test_bin], encoding='utf-8')
+        if p.wait() != 0:
+            print(f"FALHA AO COMPILAR: pulando teste '{test}'.")
+            continue
+
+        p = Popen([f'./{test_bin}'],
+                  encoding='utf-8',
+                  stdout=PIPE)
+
+        def timeout_handler():
+            print(f"TIMEOUT ({timeout} s): o teste '{test}' demorou "
+                  "demais e está sendo cancelado.")
+            p.kill()
+        timer = Timer(timeout, timeout_handler)
+        try:
+            timer.start()
+
+            assert p.stdout is not None
+            had_success = False
+            for line in p.stdout:
+                line = line.strip('\r\n')
+                print(line)
+                # TODO: consertar stub de verilator do bsc para repassar exit code,
+                # assim não precisaremos mais da checagem abaixo
+                had_success = had_success or line == 'SUCCESS'
+
+            if p.wait() == 0:
+                scores[test] = weight if had_success else 0
+        finally:
+            timer.cancel()
+
+    return scores
+
+
+def notify():
+    if not os.getenv('GITHUB_TOKEN'):
+        # não notificar se não estiver dentro do GitHub CI
+        return
+    r = requests.post(
+        'https://script.google.com/macros/s/AKfycbxpNSe_XcKYWRr9dIOvbYhd8sZATdlXlHM3_78Wk0rjgGx6uRGg2UJFVSFVDU3zdb0l/exec',
+        json={'repo': os.getenv('GITHUB_REPOSITORY'),
+              'token': os.getenv('GITHUB_TOKEN'),
+              'run_id': os.getenv('GITHUB_RUN_ID'),
+              })
+    print(r)
+    print(r.text)
+
+
+def main():
+    scores = run_tests()
+    print(json.dumps({'scores': scores}))
+    notify()
+
+
+if __name__ == '__main__':
+    main()

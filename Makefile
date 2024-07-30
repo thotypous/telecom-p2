@@ -6,7 +6,7 @@ all: project.fs
 
 TESTS := $(wildcard Test*.bsv)
 $(TESTS:.bsv=.exe): $(wildcard *.bsv)
-	bsc -u -check-assert -verilog "$(@:.exe=).bsv" && bsc -verilog -e "mk$(@:.exe=)" -o "$@"
+	bsc -u -check-assert -verilog -vsim verilator "$(@:.exe=).bsv" && bsc -verilog -vsim verilator -e "mk$(@:.exe=)" -o "$@"
 
 mkTop.v: $(wildcard *.bsv)
 	bsc -p +:%/Libraries/FPGA/Misc/ -u -verilog -show-module-use Top.bsv
