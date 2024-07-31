@@ -24,7 +24,7 @@ Para fazer tudo com um único comando (sintetizar e executar todos os testes), e
 
 ## Implementação
 
-As partes do código que estão faltando são descritas a seguir. Elas são independentes e não precisam ser implementadas em nenhuma ordem particular. No entanto, eu recomendo deixar o DPLL por último, pois é possível realizar um teste de bancada parcial mesmo se ela não estiver implementada.
+As partes do código que estão faltando são descritas a seguir. Elas são independentes e não precisam ser implementadas em nenhuma ordem particular. No entanto, eu recomendo deixar o DPLL por último, pois é possível realizar um teste de bancada parcial mesmo se ele não estiver implementado.
 
 ### HDB3Decoder
 
