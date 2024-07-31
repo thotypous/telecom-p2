@@ -32,13 +32,13 @@ def run_tests():
             print(f"FALHA AO COMPILAR: pulando teste '{test}'.")
             continue
 
+        print(f'Executando ./{test_bin}...')
         p = Popen([f'./{test_bin}'],
                   encoding='utf-8',
                   stdout=PIPE)
 
         def timeout_handler():
-            print(f"TIMEOUT ({timeout} s): o teste '{test}' demorou "
-                  "demais e está sendo cancelado.")
+            print(f"TIMEOUT: o teste demorou mais que o limite de {timeout} segundos")
             p.kill()
         timer = Timer(timeout, timeout_handler)
         try:
@@ -48,13 +48,17 @@ def run_tests():
             had_success = False
             for line in p.stdout:
                 line = line.strip('\r\n')
-                print(line)
                 # TODO: consertar stub de verilator do bsc para repassar exit code,
                 # assim não precisaremos mais da checagem abaixo
                 had_success = had_success or line == 'SUCCESS'
 
             if p.wait() == 0:
-                scores[test] = weight if had_success else 0
+                if had_success:
+                    print("OK")
+                    scores[test] = weight
+                else:
+                    print("FAIL")
+                    scores[test] = 0
         finally:
             timer.cancel()
 
