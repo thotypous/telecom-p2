@@ -102,7 +102,7 @@ end
 
 Execute um ping direcionado a qualquer endereço, por exemplo `ping 1.1.1.1`, e verifique se as respostas são recebidas.
 
-Se você tiver implementado o DPLL, tente usar o Cisco como origem de relógio, mudando a seguinte configuração:
+Se você tiver implementado o DPLL, tente usar o Cisco como fonte de relógio, mudando a seguinte configuração:
 
 ```
 controller E1 0/0/0
