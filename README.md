@@ -20,7 +20,7 @@ Para sintetizar a lógica para FPGA, execute `make`. Para carregar em um kit de 
 
 Para compilar um teste, execute `make TestNOME.exe`, e para executá-lo, faça `./TesteNOME.exe`, substituindo sempre `NOME` pelo nome do teste.
 
-Para fazer tudo com um único comando (sintetizar e executar todos os testes), execute `./run-grader`.
+Para fazer tudo com um único comando (sintetizar e executar todos os testes), execute `./run-grader`. No entanto, note que esse comando suprime a saída dos testes (para evitar gerar logs de centenas de megabytes), mostrando apenas o resultado final de cada teste (falha ou sucesso). Portanto, durante o desenvolvimento, é melhor executar os testes individualmente.
 
 ## Implementação
 
@@ -38,6 +38,8 @@ Apesar de existirem várias formas de armazenar em hardware a informação neces
 
 No entanto, não é obrigatório utilizar a estrutura sugerida! Fique à vontade para modificar completamente o código do [HDB3Decoder](HDB3Decoder.bsv) se você achar conveniente.
 
+Teste seu código com `make TestHDB3.exe && ./TestHDB3.bsv`.
+
 ### E1Unframer
 
 Implemente o módulo [mkE1Unframer](E1Unframer.bsv), que deve receber como entrada um bit e produzir como saída uma tupla contendo o índice do timeslot ao qual esse bit pertence e uma cópia do bit.
@@ -54,6 +56,8 @@ Pode ser chato produzir saídas válidas para os TS0 quando estiverem ocorrendo 
 
 Note que você pode dar outros nomes aos estados se você preferir, e que o trecho de código que já veio preenchido no [E1Unframer](E1Unframer.bsv) é apenas uma sugestão.
 
+Teste seu código com `make TestE1.exe && ./TestE1.bsv`.
+
 ### HDLCUnframer
 
 Implemente o módulo [mkHDLCUnframer](HDLCUnframer.bsv), que deve receber como entrada um bit pertencente a uma sequência enquadrada por [HDLC com *bit stuffing*](https://en.wikipedia.org/wiki/High-Level_Data_Link_Control#Synchronous_framing), desserializá-lo e produzir como saída tuplas contendo uma flag booleana de começo de quadro e um byte. Isso é quase a operação inversa do que está implementado no [HDLCFramer](HDLCFramer.bsv). A diferença é que a flag booleana no HDLCFramer é uma flag de fim de quadro, em vez de começo de quadro. O motivo é que a lógica fica mais simples desta forma.
@@ -63,6 +67,8 @@ O módulo vai ficar recebendo repetidamente a sequência de flag (`1111110`) enq
 Sempre que receber a sequência `111110`, o 0 recebido logo depois dos cinco 1s não deve ser incluído no byte de saída, uma vez que esse zero foi inserido apenas com o propósito de impedir que o conteúdo do quadro fosse confundido com uma flag.
 
 É possível implementar o código deste módulo de maneira bastante simples e concisa. Para isso, a dica é fazer uso bastante liberal de **variáveis** dentro do método `put`, gravando novos valores nos registradores apenas no final do método.
+
+Teste seu código com `make TestHDLC.exe && ./TestHDLC.bsv`.
 
 ### DPLL
 
@@ -76,9 +82,11 @@ O valor de `counter` começa em `counter_reset_value` e vai decrementando. Como 
 
 ![](fig/dpll.svg)
 
+Teste seu código com `make TestDPLL.exe && ./TestDPLL.bsv`.
+
 ## Teste de bancada
 
-Conecte à USB do seu computador um Cisco 1921 que tenha um módulo VWIC2-1MFT-T1/E1 instalado. Plugue a sua interface E1 implementada em FPGA nesse módulo do Cisco.
+Conecte à USB do seu computador um Cisco 1921 que tenha um módulo VWIC2-1MFT-T1/E1 instalado. Plugue a sua [interface E1 implementada em FPGA](https://github.com/thotypous/telecom-p2-board) nesse módulo do Cisco.
 
 Conecte-se ao console do Cisco executando: `picocom -b 9600 /dev/ttyACM0`.
 
