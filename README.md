@@ -38,7 +38,7 @@ Apesar de existirem várias formas de armazenar em hardware a informação neces
 
 No entanto, não é obrigatório utilizar a estrutura sugerida! Fique à vontade para modificar completamente o código do [HDB3Decoder](HDB3Decoder.bsv) se você achar conveniente.
 
-Teste seu código com `make TestHDB3.exe && ./TestHDB3.bsv`.
+Teste seu código com `make TestHDB3.exe && ./TestHDB3.exe`.
 
 ### E1Unframer
 
@@ -56,7 +56,7 @@ Pode ser chato produzir saídas válidas para os TS0 quando estiverem ocorrendo 
 
 Note que você pode dar outros nomes aos estados se você preferir, e que o trecho de código que já veio preenchido no [E1Unframer](E1Unframer.bsv) é apenas uma sugestão.
 
-Teste seu código com `make TestE1.exe && ./TestE1.bsv`.
+Teste seu código com `make TestE1.exe && ./TestE1.exe`.
 
 ### HDLCUnframer
 
@@ -68,7 +68,7 @@ Sempre que receber a sequência `111110`, o 0 recebido logo depois dos cinco 1s 
 
 É possível implementar o código deste módulo de maneira bastante simples e concisa. Para isso, a dica é fazer uso bastante liberal de **variáveis** dentro do método `put`, gravando novos valores nos registradores apenas no final do método.
 
-Teste seu código com `make TestHDLC.exe && ./TestHDLC.bsv`.
+Teste seu código com `make TestHDLC.exe && ./TestHDLC.exe`.
 
 ### DPLL
 
@@ -82,7 +82,7 @@ O valor de `counter` começa em `counter_reset_value` e vai decrementando. Como 
 
 ![](fig/dpll.svg)
 
-Teste seu código com `make TestDPLL.exe && ./TestDPLL.bsv`.
+Teste seu código com `make TestDPLL.exe && ./TestDPLL.exe`.
 
 ## Teste de bancada
 
