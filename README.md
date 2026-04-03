@@ -126,12 +126,10 @@ A placa Tang Nano 9k dispõe de um adaptador USB UART que pode ser bastante úti
 
 Para enviar um byte `octet` para a UART e recebê-lo no computador pela USB, chame `fifo_uart.enq(octet)` no ponto desejado do arquivo [Top.bsv](Top.bsv).
 
-Note, no entanto, que o adaptador USB UART da Tang Nano 9k é um FTDI emulado que é um pouco bugado. Para funcionar corretamente, um truque que parece dar certo sempre é, antes de carregar o bitfile na placa (ou seja, antes de fazer `make load`), usar o procedimento a seguir para abrir o GNU screen, fechá-lo, e abrir o picocom em seguida:
+Note, no entanto, que o adaptador USB UART da Tang Nano 9k é um FTDI emulado que é um pouco bugado. Para funcionar corretamente, um truque que parece dar certo sempre é, antes de carregar o bitfile na placa (ou seja, antes de fazer `make load`), usar o procedimento a seguir para (pré-)configurar a UART e abrir o picocom em seguida:
 
-1. Execute `screen /dev/ttyUSB1 3000000,cs8,-parenb,cstopb`.
+1.  Execute `stty -F /dev/ttyUSB1 3000000 cs8 -parenb cstopb`.
 
-2. Feche o GNU screen digitando `Ctrl+a`, seguido da teclada `k`, seguido da tecla `y`.
+2.  Execute o picocom e mantenha-o executando durante os seus testes: `picocom -b 3000000 -d 8 -p 1 -y n /dev/ttyUSB1`.
 
-3. Por fim, execute o picocom e mantenha-o executando durante os seus testes: `picocom -b 3000000 -d 8 -p 1 -y n /dev/ttyUSB1`.
-
-4. Se você desejar, é possível ler os dados recebidos da UART em formato hexadecimal, o que é útil se eles forem dados binários. Para isso, feche o picocom com `Ctrl+a` seguido de `Ctrl+x`, e execute `hexdump -C /dev/ttyUSB1`.
+3.  Se você desejar, é possível ler os dados recebidos da UART em formato hexadecimal, o que é útil se eles forem dados binários. Para isso, feche o picocom com `Ctrl+a` seguido de `Ctrl+q`, e execute `hexdump -C /dev/ttyUSB1`.
