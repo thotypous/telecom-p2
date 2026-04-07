@@ -1,0 +1,19 @@
+name: CI Grader
+on: push
+jobs:
+  run-autograding-tests:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-classroom[bot]'
+    container:
+      image: 'ghcr.io/thotypous/docker-fpga-builder:main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run grader
+        id: grader
+        run: ./run-grader
+      - name: Report final grade
+        uses: classroom-resources/autograding-grading-reporter@v1
+        env:
+          GRADER_RESULTS: "${{steps.grader.outputs.result}}"
+        with:
+          runners: grader

@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
+import base64
 import os
+import sys
 import json
-import requests
+import time
+import uuid
 from subprocess import Popen, PIPE
 from threading import Timer
+
+
+def main():
+    set_output('result', base64.b64encode(json.dumps(run_tests()).encode('utf-8')).decode('ascii'))
 
 
 def run_tests():
@@ -13,7 +20,7 @@ def run_tests():
         ('HDLC', 2, 10),
         ('DPLL', 2, 10),
     ]
-    scores = {}
+    results = []
 
     os.system('make clean')
     if os.system('make') != 0:
@@ -21,23 +28,35 @@ def run_tests():
               'Certifique-se que não há erros de compilação e que sua lógica '
               'consegue executar rápido o suficiente com relação ao clock '
               'fornecido.')
-        return {}
+        sys.exit(1)
 
     for test, weight, timeout in tests:
         test_bin = f'Test{test}.exe'
-        scores[test] = 0
 
         p = Popen(['make', test_bin], encoding='utf-8')
         if p.wait() != 0:
             print(f"FALHA AO COMPILAR: pulando teste '{test}'.")
+            results.append(generate_test_result(
+                name=test,
+                status='error',
+                score=0,
+                max_score=weight,
+                message=f'Falha ao compilar {test_bin}.',
+                test_code=f'make {test_bin}',
+                duration=0,
+            ))
             continue
 
         print(f'Executando ./{test_bin}...')
+        start_time = time.monotonic()
         p = Popen([f'./{test_bin}'],
                   encoding='utf-8',
                   stdout=PIPE)
+        timed_out = False
 
         def timeout_handler():
+            nonlocal timed_out
+            timed_out = True
             print(f"TIMEOUT: o teste demorou mais que o limite de {timeout} segundos")
             p.kill()
         timer = Timer(timeout, timeout_handler)
@@ -52,37 +71,101 @@ def run_tests():
                 # assim não precisaremos mais da checagem abaixo
                 had_success = had_success or line == 'SUCCESS'
 
-            if p.wait() == 0:
-                if had_success:
-                    print("OK")
-                    scores[test] = weight
-                else:
-                    print("FAIL")
-                    scores[test] = 0
+            exit_code = p.wait()
+            duration = int((time.monotonic() - start_time) * 1000)
+
+            if timed_out:
+                status = 'error'
+                score = 0
+                message = f'Timeout após {timeout} segundos.'
+            elif exit_code == 0 and had_success:
+                print("OK")
+                status = 'pass'
+                score = weight
+                message = 'OK'
+            else:
+                print("FAIL")
+                status = 'fail'
+                score = 0
+                message = 'FAIL'
+
+            results.append(generate_test_result(
+                name=test,
+                status=status,
+                score=score,
+                max_score=weight,
+                message=message,
+                test_code=f'./{test_bin}',
+                duration=duration,
+            ))
         finally:
             timer.cancel()
 
-    return scores
+    return generate_result(overall_status(results), tests, results)
 
 
-def notify():
-    if not os.getenv('GITHUB_TOKEN'):
-        # não notificar se não estiver dentro do GitHub CI
-        return
-    r = requests.post(
-        'https://script.google.com/macros/s/AKfycbxpNSe_XcKYWRr9dIOvbYhd8sZATdlXlHM3_78Wk0rjgGx6uRGg2UJFVSFVDU3zdb0l/exec',
-        json={'repo': os.getenv('GITHUB_REPOSITORY'),
-              'token': os.getenv('GITHUB_TOKEN'),
-              'run_id': os.getenv('GITHUB_RUN_ID'),
-              })
-    print(r)
-    print(r.text)
+def generate_result(status, tests, results):
+    return {
+        'version': 1,
+        'status': status,
+        'max_score': sum(weight for _, weight, _ in tests),
+        'tests': results,
+    }
 
 
-def main():
-    scores = run_tests()
-    print(json.dumps({'scores': scores}))
-    notify()
+def generate_test_result(name, status, score, max_score, message, test_code, duration):
+    return {
+        'name': name,
+        'status': status,
+        'score': score,
+        'max_score': max_score,
+        'message': message,
+        'test_code': test_code,
+        'filename': '',
+        'line_no': 0,
+        'duration': duration,
+    }
+
+
+def overall_status(results):
+    statuses = {result['status'] for result in results}
+    if 'error' in statuses:
+        return 'error'
+    if 'fail' in statuses:
+        return 'fail'
+    return 'pass'
+
+
+def to_command_value(value):
+    if value is None:
+        return ''
+    if isinstance(value, str):
+        return value
+    return json.dumps(value)
+
+
+def prepare_key_value_message(key, value):
+    delimiter = f'ghadelimiter_{uuid.uuid4()}'
+    converted_value = to_command_value(value)
+
+    if delimiter in key:
+        raise ValueError(
+            f'Unexpected input: name should not contain the delimiter "{delimiter}"'
+        )
+    if delimiter in converted_value:
+        raise ValueError(
+            f'Unexpected input: value should not contain the delimiter "{delimiter}"'
+        )
+
+    return f'{key}<<{delimiter}{os.linesep}{converted_value}{os.linesep}{delimiter}'
+
+
+def set_output(name, value):
+    file_path = os.getenv('GITHUB_OUTPUT')
+    if file_path:
+        with open(file_path, 'a', encoding='utf-8') as output_file:
+            output_file.write(prepare_key_value_message(name, value))
+            output_file.write(os.linesep)
 
 
 if __name__ == '__main__':
