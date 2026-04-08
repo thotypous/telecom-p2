@@ -2,7 +2,7 @@
 
 ## Introdução
 
-Nesta prática, vamos implementar uma interface [E1](https://web.fe.up.pt/~mleitao/STEL/Tecnico/E1_ACTERNA.pdf) ligada a uma lógica capaz de responder pings (ICMP) sobre IPv4 sobre HDLC.
+Nesta prática, vamos implementar uma interface [E1](https://web.archive.org/web/20240429125245/https://web.fe.up.pt/~mleitao/STEL/Tecnico/E1_ACTERNA.pdf) ligada a uma lógica capaz de responder pings (ICMP) sobre IPv4 sobre HDLC.
 
 ## Dependências
 
@@ -28,7 +28,7 @@ As partes do código que estão faltando são descritas a seguir. Elas são inde
 
 ### HDB3Decoder
 
-Implemente o módulo [mkHDB3Decoder](HDB3Decoder.bsv), que deve receber como entrada símbolos em três níveis (P, Z ou N) codificados em [HDB3](https://web.fe.up.pt/~mleitao/STEL/Tecnico/E1_ACTERNA.pdf#page=37) e produzir como saída bits (1 ou 0). Isso nada mais é que a operação inversa do que está implementado no [HDB3Encoder](HDB3Encoder.bsv).
+Implemente o módulo [mkHDB3Decoder](HDB3Decoder.bsv), que deve receber como entrada símbolos em três níveis (P, Z ou N) codificados em [HDB3](https://web.archive.org/web/20240429125245/https://web.fe.up.pt/~mleitao/STEL/Tecnico/E1_ACTERNA.pdf#page=37) e produzir como saída bits (1 ou 0). Isso nada mais é que a operação inversa do que está implementado no [HDB3Encoder](HDB3Encoder.bsv).
 
 Note que, geralmente, basta converter os níveis zero (Z) em bits 0, e os pulsos positivos ou negativos (P ou N) em bits 1. A parte um pouco mais complicada é detectar as sequências que originalmente (antes da codificação em HDB3) eram quatro zeros seguidos — elas podem ter virado PZZP, NZZN, ZZZP (depois de um P) ou ZZZN (depois de um N). Nesses casos, os quatro símbolos pertencentes à sequência precisam virar bits 0 de volta; em outras palavras, os pulsos presentes nesses quatro símbolos não podem virar bits 1 como de costume.
 
@@ -44,7 +44,7 @@ Teste seu código com `make TestHDB3.exe && ./TestHDB3.exe`.
 
 Implemente o módulo [mkE1Unframer](E1Unframer.bsv), que deve receber como entrada um bit e produzir como saída uma tupla contendo o índice do timeslot ao qual esse bit pertence e uma cópia do bit.
 
-Para descobrir a qual timeslot cada bit pertence, deve-se localizar o TS0, que alterna entre as sequências [FAS e NFAS](https://web.fe.up.pt/~mleitao/STEL/Tecnico/E1_ACTERNA.pdf#page=15).
+Para descobrir a qual timeslot cada bit pertence, deve-se localizar o TS0, que alterna entre as sequências [FAS e NFAS](https://web.archive.org/web/20240429125245/https://web.fe.up.pt/~mleitao/STEL/Tecnico/E1_ACTERNA.pdf#page=15).
 
 O módulo deve começar no estado `UNSYNCED` e, ao encontrar a sequência `0011011` (FAS), deve alternar para o estado `FIRST_FAS` e considerar que o próximo bit a ser recebido provavelmente é o bit mais significativo do TS1. Ao chegar no TS0 seguinte, o módulo deve verificar se ele contém uma sequência que possa ser considerada válida como NFAS (o segundo bit de MSB para LSB deve ser 1); em caso positivo, deve alternar para o estado `FIRST_NFAS`, senão voltar para `UNSYNCED`. Por fim, o módulo deve novamente esperar pelo TS0 seguinte e verificar se é um FAS, caso no qual deve alternar para o estado `SYNCED`, senão voltar para `UNSYNCED`.
 
