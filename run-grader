@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 import base64
+import json
 import os
 import sys
-import json
 import time
 import uuid
-from subprocess import Popen, PIPE
-from threading import Timer
+from subprocess import DEVNULL, TimeoutExpired, run
 
 
 def main():
@@ -22,8 +21,8 @@ def run_tests():
     ]
     results = []
 
-    os.system('make clean')
-    if os.system('make') != 0:
+    run(['make', 'clean'], stdout=DEVNULL, stderr=DEVNULL, check=False)
+    if run(['make'], check=False).returncode != 0:
         print('ABORTANDO TESTES: falha ao sintetizar! '
               'Certifique-se que não há erros de compilação e que sua lógica '
               'consegue executar rápido o suficiente com relação ao clock '
@@ -33,8 +32,7 @@ def run_tests():
     for test, weight, timeout in tests:
         test_bin = f'Test{test}.exe'
 
-        p = Popen(['make', test_bin], encoding='utf-8')
-        if p.wait() != 0:
+        if run(['make', test_bin], check=False).returncode != 0:
             print(f"FALHA AO COMPILAR: pulando teste '{test}'.")
             results.append(generate_test_result(
                 name=test,
@@ -46,39 +44,14 @@ def run_tests():
                 duration=0,
             ))
             continue
-
+        
         print(f'Executando ./{test_bin}...')
         start_time = time.monotonic()
-        p = Popen([f'./{test_bin}'],
-                  encoding='utf-8',
-                  stdout=PIPE)
-        timed_out = False
-
-        def timeout_handler():
-            nonlocal timed_out
-            timed_out = True
-            print(f"TIMEOUT: o teste demorou mais que o limite de {timeout} segundos")
-            p.kill()
-        timer = Timer(timeout, timeout_handler)
         try:
-            timer.start()
-
-            assert p.stdout is not None
-            had_success = False
-            for line in p.stdout:
-                line = line.strip('\r\n')
-                # TODO: consertar stub de verilator do bsc para repassar exit code,
-                # assim não precisaremos mais da checagem abaixo
-                had_success = had_success or line == 'SUCCESS'
-
-            exit_code = p.wait()
+            exit_code = run([f'./{test_bin}'], stdout=DEVNULL, timeout=timeout, check=False).returncode
             duration = int((time.monotonic() - start_time) * 1000)
 
-            if timed_out:
-                status = 'error'
-                score = 0
-                message = f'Timeout após {timeout} segundos.'
-            elif exit_code == 0 and had_success:
+            if exit_code == 0:
                 print("OK")
                 status = 'pass'
                 score = weight
@@ -89,17 +62,22 @@ def run_tests():
                 score = 0
                 message = 'FAIL'
 
-            results.append(generate_test_result(
-                name=test,
-                status=status,
-                score=score,
-                max_score=weight,
-                message=message,
-                test_code=f'./{test_bin}',
-                duration=duration,
-            ))
-        finally:
-            timer.cancel()
+        except TimeoutExpired:
+            duration = int((time.monotonic() - start_time) * 1000)
+            print(f"TIMEOUT: o teste demorou mais que o limite de {timeout} segundos")
+            status = 'error'
+            score = 0
+            message = f'Timeout após {timeout} segundos.'
+
+        results.append(generate_test_result(
+            name=test,
+            status=status,
+            score=score,
+            max_score=weight,
+            message=message,
+            test_code=f'./{test_bin}',
+            duration=duration,
+        ))
 
     return generate_result(overall_status(results), tests, results)
 

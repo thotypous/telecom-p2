@@ -10,3 +10,4 @@ model_*.h
 *.use
 *.fs
 *.exe
+__pycache__
