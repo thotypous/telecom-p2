@@ -2,91 +2,192 @@
 import base64
 import json
 import os
+import select
 import sys
 import time
 import uuid
-from subprocess import DEVNULL, TimeoutExpired, run
+from collections import deque
+from subprocess import DEVNULL, STDOUT, PIPE, Popen, run
+
+
+TESTS = [
+    ('HDB3', 2, 10),
+    ('E1', 2, 10),
+    ('HDLC', 2, 10),
+    ('DPLL', 2, 10),
+]
+
+OUTPUT_TAIL_LINES = 120
 
 
 def main():
-    set_output('result', base64.b64encode(json.dumps(run_tests()).encode('utf-8')).decode('ascii'))
+    result = run_tests()
+    if not os.getenv('GITHUB_OUTPUT'):
+        print(json.dumps(result, indent=2), flush=True)
+    set_output('result', base64.b64encode(json.dumps(result).encode('utf-8')).decode('ascii'))
+    if result['status'] == 'error':
+        sys.exit(1)
 
 
 def run_tests():
-    tests = [
-        ('HDB3', 2, 10),
-        ('E1', 2, 10),
-        ('HDLC', 2, 10),
-        ('DPLL', 2, 10),
-    ]
     results = []
 
     run(['make', 'clean'], stdout=DEVNULL, stderr=DEVNULL, check=False)
+    print('Sintetizando projeto...', flush=True)
     if run(['make'], check=False).returncode != 0:
         print('ABORTANDO TESTES: falha ao sintetizar! '
               'Certifique-se que não há erros de compilação e que sua lógica '
               'consegue executar rápido o suficiente com relação ao clock '
-              'fornecido.')
-        sys.exit(1)
-
-    for test, weight, timeout in tests:
-        test_bin = f'Test{test}.exe'
-
-        if run(['make', test_bin], check=False).returncode != 0:
-            print(f"FALHA AO COMPILAR: pulando teste '{test}'.")
-            results.append(generate_test_result(
-                name=test,
+              'fornecido.', flush=True)
+        return generate_result(
+            'error',
+            [generate_test_result(
+                name='Synthesis',
                 status='error',
                 score=0,
-                max_score=weight,
-                message=f'Falha ao compilar {test_bin}.',
-                test_code=f'make {test_bin}',
+                max_score=max_score(),
+                message='Falha ao sintetizar o projeto.',
+                test_code='make',
                 duration=0,
-            ))
-            continue
-        
-        print(f'Executando ./{test_bin}...')
-        start_time = time.monotonic()
-        try:
-            exit_code = run([f'./{test_bin}'], stdout=DEVNULL, timeout=timeout, check=False).returncode
-            duration = int((time.monotonic() - start_time) * 1000)
+            )],
+        )
 
-            if exit_code == 0:
-                print("OK")
-                status = 'pass'
-                score = weight
-                message = 'OK'
-            else:
-                print("FAIL")
-                status = 'fail'
-                score = 0
-                message = 'FAIL'
+    for test, weight, timeout in TESTS:
+        results.append(run_test(test, weight, timeout))
 
-        except TimeoutExpired:
-            duration = int((time.monotonic() - start_time) * 1000)
-            print(f"TIMEOUT: o teste demorou mais que o limite de {timeout} segundos")
-            status = 'error'
-            score = 0
-            message = f'Timeout após {timeout} segundos.'
+    return generate_result(overall_status(results), results)
 
-        results.append(generate_test_result(
+
+def run_test(test, weight, timeout):
+    test_bin = f'Test{test}.exe'
+    compile_start = time.monotonic()
+
+    print(f'Compilando {test_bin}...', flush=True)
+    if run(['make', test_bin], check=False).returncode != 0:
+        print(f"FALHA AO COMPILAR: pulando teste '{test}'.", flush=True)
+        return generate_test_result(
             name=test,
-            status=status,
-            score=score,
+            status='error',
+            score=0,
             max_score=weight,
-            message=message,
-            test_code=f'./{test_bin}',
-            duration=duration,
-        ))
+            message=f'Falha ao compilar {test_bin}.',
+            test_code=f'make {test_bin}',
+            duration=elapsed_ms(compile_start),
+        )
 
-    return generate_result(overall_status(results), tests, results)
+    print(f'Executando ./{test_bin}...', flush=True)
+    start_time = time.monotonic()
+    exit_code, output_tail, timed_out = run_with_tail([f'./{test_bin}'], timeout)
+    duration = elapsed_ms(start_time)
+
+    if timed_out:
+        print(f"TIMEOUT: o teste demorou mais que o limite de {timeout} segundos", flush=True)
+        print_output_tail(output_tail)
+        status = 'error'
+        score = 0
+        message = f'Timeout apos {timeout} segundos.'
+    elif exit_code == 0:
+        print('OK', flush=True)
+        status = 'pass'
+        score = weight
+        message = 'OK'
+    else:
+        print('FAIL', flush=True)
+        print_output_tail(output_tail)
+        status = 'fail'
+        score = 0
+        message = 'FAIL'
+
+    return generate_test_result(
+        name=test,
+        status=status,
+        score=score,
+        max_score=weight,
+        message=message,
+        test_code=f'./{test_bin}',
+        duration=duration,
+    )
 
 
-def generate_result(status, tests, results):
+def run_with_tail(command, timeout, tail_lines=OUTPUT_TAIL_LINES):
+    output_tail = deque(maxlen=tail_lines)
+    pending = ''
+    process = Popen(command, stdout=PIPE, stderr=STDOUT)
+
+    assert process.stdout is not None
+    fd = process.stdout.fileno()
+    os.set_blocking(fd, False)
+    deadline = None if timeout is None else time.monotonic() + timeout
+
+    while True:
+        remaining = None if deadline is None else deadline - time.monotonic()
+        if remaining is not None and remaining <= 0:
+            process.kill()
+            process.wait()
+            pending = drain_output(fd, output_tail, pending)
+            append_pending(output_tail, pending)
+            return process.returncode, list(output_tail), True
+
+        select_timeout = 0.1 if remaining is None else min(0.1, remaining)
+        ready, _, _ = select.select([fd], [], [], select_timeout)
+        if ready:
+            pending = read_available(fd, output_tail, pending)
+
+        exit_code = process.poll()
+        if exit_code is not None:
+            pending = drain_output(fd, output_tail, pending)
+            append_pending(output_tail, pending)
+            return exit_code, list(output_tail), False
+
+
+def read_available(fd, output_tail, pending):
+    try:
+        chunk = os.read(fd, 4096)
+    except BlockingIOError:
+        return pending
+
+    if not chunk:
+        return pending
+
+    pending += chunk.decode('utf-8', errors='replace')
+    while '\n' in pending:
+        line, pending = pending.split('\n', 1)
+        output_tail.append(line.rstrip('\r'))
+
+    if len(pending) > 8192:
+        pending = pending[-8192:]
+
+    return pending
+
+
+def drain_output(fd, output_tail, pending):
+    while True:
+        old_pending = pending
+        pending = read_available(fd, output_tail, pending)
+        if pending == old_pending:
+            return pending
+
+
+def append_pending(output_tail, pending):
+    if pending:
+        output_tail.append(pending.rstrip('\r'))
+
+
+def print_output_tail(output_tail):
+    if not output_tail:
+        print('Sem saida capturada do teste.', flush=True)
+        return
+
+    print(f'Ultimas {len(output_tail)} linhas de saida do teste:', flush=True)
+    for line in output_tail:
+        print(line, flush=True)
+
+
+def generate_result(status, results):
     return {
         'version': 1,
         'status': status,
-        'max_score': sum(weight for _, weight, _ in tests),
+        'max_score': max_score(),
         'tests': results,
     }
 
@@ -112,6 +213,14 @@ def overall_status(results):
     if 'fail' in statuses:
         return 'fail'
     return 'pass'
+
+
+def max_score():
+    return sum(weight for _, weight, _ in TESTS)
+
+
+def elapsed_ms(start_time):
+    return int((time.monotonic() - start_time) * 1000)
 
 
 def to_command_value(value):
