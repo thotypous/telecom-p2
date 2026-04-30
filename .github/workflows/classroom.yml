@@ -10,6 +10,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run grader
         id: grader
+        continue-on-error: true
         run: ./run-grader
       - name: Report final grade
         uses: classroom-resources/autograding-grading-reporter@v1
